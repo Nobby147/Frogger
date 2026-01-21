@@ -27,12 +27,19 @@
     <script>
         const debug = (msg) => { document.getElementById('debug-info').innerText += msg + "\n"; };
         
-        // --- 音声ファイル設定 ---
-        // パスを修正：サーバー用(/assets/...)ではなく、同じフォルダ内(./)を参照するように変更
-        const bgm = new Audio('frog.mp3'); bgm.loop = true;
-        const seJump = new Audio('jump.mp3');
-        const seCrash = new Audio('crash.mp3');
-        const seGoal = new Audio('goal.mp3');
+// --- 音声ファイル設定 ---
+// 頭に '.' をつけることで「現在の場所から assets フォルダを探す」という指定になります
+const bgm = new Audio('./assets/sounds/frog.mp3'); bgm.loop = true;
+const seJump = new Audio('./assets/sounds/jump.mp3');
+const seCrash = new Audio('./assets/sounds/crash.mp3');
+const seGoal = new Audio('./assets/sounds/goal.mp3');
+        // デバッグ用：読み込みに失敗したときに具体的な原因をコンソールに出す
+[bgm, seJump, seCrash, seGoal].forEach(audio => {
+    audio.addEventListener('error', (e) => {
+        console.error("Failed to load:", audio.src);
+        debug("Load Error: " + audio.src.split('/').pop()); // ファイル名だけ表示
+    });
+});
 
         const canvas = document.getElementById("game");
         const ctx = canvas.getContext("2d");
@@ -162,3 +169,4 @@
     </script>
 </body>
 </html>
+
