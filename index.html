@@ -140,10 +140,13 @@ const seGoal = new Audio('./assets/sounds/goal.mp3');
             if (onLog) { player.x += vx / gridSize; }
             ctx.fillText(player.char, player.x * gridSize + 5, player.y * gridSize + 40);
 
-            // ゴール判定
-            if (player.y === 0 && Math.round(player.x) === 4) {
-                seGoal.play(); alert("GOAL!"); location.reload();
-            }
+if (player.y === 0 && Math.round(player.x) === 4) {
+        isCleared = true;
+        seGoal.play().catch(()=>{});
+        
+        // alertを消して、画面内の要素を表示させる
+        document.getElementById("clear-screen").style.display = "block";
+    }
             requestAnimationFrame(draw);
         }
 
@@ -169,4 +172,5 @@ const seGoal = new Audio('./assets/sounds/goal.mp3');
     </script>
 </body>
 </html>
+
 
