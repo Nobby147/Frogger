@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Frogger - Home Sweet Home</title>
+    <title>Frogger - Complete</title>
     <style>
         body { 
             background: #222; color: white; font-family: sans-serif; text-align: center; 
@@ -15,7 +15,7 @@
         }
         #start-screen, #clear-screen {
             position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            background: rgba(0,0,0,0.9); border: 3px solid #2ecc71; padding: 30px; border-radius: 15px; 
+            background: rgba(0,0,0,0.95); border: 3px solid #2ecc71; padding: 30px; border-radius: 15px; 
             z-index: 20; width: 70%;
         }
         button { padding: 15px 30px; font-size: 1.2rem; cursor: pointer; background: #2ecc71; border: none; color: white; border-radius: 5px; }
@@ -25,13 +25,13 @@
 
     <div id="start-screen">
         <h2>Frogger Game</h2>
-        <p>音を出すためにボタンを押してね</p>
+        <p>STARTを押すと音が流れます</p>
         <button onclick="startGame()">START</button>
     </div>
 
     <div id="clear-screen" style="display:none;">
         <h2 style="color: #2ecc71;">Welcome Home!</h2>
-        <div style="font-size: 2rem; color: #f1c40f;">Signal</div>
+        <div style="font-size: 2rem; color: #f1c40f; margin: 10px;">Signal</div>
         <button onclick="location.reload()">Replay</button>
     </div>
 
@@ -43,7 +43,6 @@
         const startScreen = document.getElementById("start-screen");
         const clearScreen = document.getElementById("clear-screen");
 
-        // 音声ファイル
         const bgm = new Audio('/assets/sounds/frog.mp3'); bgm.loop = true;
         const seJump = new Audio('/assets/sounds/jump.mp3');
         const seCrash = new Audio('/assets/sounds/crash.mp3');
@@ -53,8 +52,8 @@
         let isCleared = false;
         const gridSize = 50;
         const player = { x: 4, y: 11, char: "🐸", vx: 0 };
+        let particles = [];
 
-        // 障害物（手前の芝生 y=9, 10のみ）
         const obstacles = [
             {x: 1, y: 10, icon: "🌲"}, {x: 6, y: 10, icon: "🧱"},
             {x: 3, y: 9, icon: "🌲"}, {x: 5, y: 9, icon: "🧱"}
@@ -67,27 +66,35 @@
             { y: 5, speed: 1.2, dir: 1,  logs: [{x:0, w:120}, {x:250, w:120}] }
         ];
 
-        // STARTボタンを押したときに音声を有効化
         function startGame() {
             startScreen.style.display = "none";
             gameStarted = true;
-            bgm.play().catch(e => console.log("Audio Error:", e));
+            bgm.play().catch(() => {});
             draw();
+        }
+
+        // エフェクト生成（土煙・水しぶき）
+        function createParticles(x, y, color) {
+            for(let i=0; i<8; i++) {
+                particles.push({
+                    x: x, y: y,
+                    vx: (Math.random()-0.5)*3,
+                    vy: (Math.random()-0.5)*3,
+                    life: 1.0,
+                    color: color
+                });
+            }
         }
 
         function draw() {
             if (!gameStarted || isCleared) return;
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // 1. 背景（空：水色）
-            ctx.fillStyle = "#87CEEB";
-            ctx.fillRect(0, 0, 400, 600);
-
-            // 2. 川のエリア
+            // 1. 川のエリアを先に描画（y=250～450）
             ctx.fillStyle = "#2980b9";
             ctx.fillRect(0, 250, 400, 200);
 
-            // 3. 丸太
+            // 2. 丸太
             let onLog = false;
             player.vx = 0;
             lanes.forEach(lane => {
@@ -103,25 +110,36 @@
                 });
             });
 
-            // 4. 芝生（丸太の上にかぶせる）
+            // 3. 芝生（エリア間の隙間をなくすため、ピッタリの座標で描画）
             ctx.fillStyle = "#2ecc71";
-            ctx.fillRect(0, 450, 400, 150); // 手前 (y=9, 10, 11)
-            ctx.fillRect(0, 200, 400, 50);  // 中洲 (y=4)
-            ctx.fillRect(0, 0, 400, 50);    // ゴール (y=0)
+            ctx.fillRect(0, 450, 400, 150); // 手前 (y:9,10,11)
+            ctx.fillRect(0, 200, 400, 50);  // 中洲 (y:4)
+            ctx.fillRect(0, 0, 400, 200);   // ゴール芝生 (y:0,1,2,3) ※ここを広げて水色の隙間を消去
 
-            // 5. 家と障害物
+            // 4. 家と障害物
             ctx.font = "45px Arial";
-            ctx.fillText("🏠", 4 * gridSize + 2, 45); // ゴールハウス
+            ctx.fillText("🏠", 4 * gridSize + 2, 0 * gridSize + 45); // y=0のど真ん中
             ctx.font = "35px Arial";
             obstacles.forEach(obs => ctx.fillText(obs.icon, obs.x * gridSize + 5, obs.y * gridSize + 40));
 
-            // 判定
+            // 5. 判定（水没）
             if (player.y >= 5 && player.y <= 8 && !onLog) {
-                seCrash.currentTime = 0; seCrash.play();
+                createParticles(player.x * gridSize + 25, player.y * gridSize + 25, "#FFF"); // 水しぶき
+                seCrash.currentTime = 0; seCrash.play().catch(()=>{});
                 resetPlayer();
             }
 
-            // 6. プレイヤー
+            // 6. パーティクルの更新
+            particles.forEach((p, i) => {
+                p.x += p.vx; p.y += p.vy; p.life -= 0.05;
+                ctx.fillStyle = p.color;
+                ctx.globalAlpha = p.life;
+                ctx.fillRect(p.x, p.y, 4, 4);
+                if(p.life <= 0) particles.splice(i, 1);
+            });
+            ctx.globalAlpha = 1.0;
+
+            // 7. プレイヤー
             if (onLog) {
                 player.x += player.vx / gridSize;
                 if(player.x < 0) player.x = 0; if(player.x > 7.1) player.x = 7.1;
@@ -131,7 +149,7 @@
             // ゴール判定
             if (player.y === 0 && Math.round(player.x) === 4) {
                 isCleared = true;
-                seGoal.play();
+                seGoal.play().catch(()=>{});
                 clearScreen.style.display = "block";
             }
             requestAnimationFrame(draw);
@@ -144,9 +162,14 @@
             let nextX = Math.round(player.x + dx);
             let nextY = player.y + dy;
             if (obstacles.some(obs => obs.x === nextX && obs.y === nextY)) return;
+            
             if (nextX >= 0 && nextX <= 7) player.x = nextX;
             if (nextY >= 0 && nextY <= 11) player.y = nextY;
-            seJump.currentTime = 0; seJump.play();
+
+            // 土煙エフェクト（移動ごと）
+            createParticles(player.x * gridSize + 25, player.y * gridSize + 40, "#bdc3c7");
+            
+            seJump.currentTime = 0; seJump.play().catch(()=>{});
         }
 
         window.addEventListener("keydown", e => {
