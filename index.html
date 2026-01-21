@@ -3,101 +3,131 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Frogger</title>
+    <title>Frogger - Rocks & River</title>
     <style>
-        /* 画面全体のスクロールや余白を防止 */
         body { 
-            background: #333; color: white; font-family: sans-serif; text-align: center; 
+            background: #222; color: white; font-family: sans-serif; text-align: center; 
             margin: 0; padding: 0; overflow: hidden; position: fixed; width: 100%; height: 100%;
         }
-        h2 { margin: 10px 0 5px; font-size: 1.2rem; }
-        .hint { color: #aaa; font-size: 0.8rem; margin-bottom: 5px; }
-
-        /* キャンバスを画面幅に合わせて拡大 */
         canvas { 
             background: #111; border: 2px solid #555; 
             display: block; margin: 0 auto; 
-            width: 95vw; /* 画面横幅の95%に拡大 */
-            max-width: 400px; /* パソコンでは大きくなりすぎないように */
-            height: auto; /* 縦横比を維持 */
-            touch-action: none; /* スマホのブラウザ操作（ズーム等）を無効化 */
+            width: 95vw; max-width: 400px; height: auto; 
+            touch-action: none;
         }
-
         #clear-screen {
             display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
             background: rgba(0,0,0,0.9); border: 3px solid #f1c40f; padding: 20px; border-radius: 15px; 
             z-index: 10; width: 80%;
         }
-        .coord { font-size: 1.5rem; color: #f1c40f; font-family: monospace; margin: 15px 0; }
-        button { padding: 12px 24px; font-size: 1rem; cursor: pointer; }
+        button { padding: 12px 24px; font-size: 1rem; margin-top: 10px; cursor: pointer; }
     </style>
 </head>
 <body>
 
-    <h2>Help the frog cross the roads</h2>
-    <p class="hint">PC Move : ← →　↑ ↓<br>
-Smartphone Move : Tap top, bottom, left, and right of the frog</p>
-
-    <canvas id="game" width="400" height="500"></canvas>
-
-    <div id="clear-screen">
-        <h2 style="color: #2ecc71;">You did it!</h2>
-        <p>Keyword :</p>
-        <div class="coord"><h1>Signal</h1></div>
-        <!--
-        <button onclick="location.reload()">リプレイ</button>
+    <h2>Avoid Rocks & Cross River</h2>
+    <canvas id="game" width="400" height="550"></canvas> <div id="clear-screen">
+        <h2 style="color: #2ecc71;">Goal Reached!</h2>
+        <div style="font-size: 2rem; color: #f1c40f;">Signal</div>
+        <button onclick="location.reload()">Replay</button>
     </div>
-    -->
 
     <script>
         const canvas = document.getElementById("game");
         const ctx = canvas.getContext("2d");
         const clearScreen = document.getElementById("clear-screen");
 
+        // 音声
+        const bgm = new Audio('/assets/sounds/frog.mp3'); bgm.loop = true;
+        const seJump = new Audio('/assets/sounds/jump.mp3');
+        const seCrash = new Audio('/assets/sounds/crash.mp3');
+        const seGoal = new Audio('/assets/sounds/goal.mp3');
+
         const gridSize = 50;
         let isCleared = false;
+        let frame = 0;
 
-        const player = { x: 4, y: 9, char: "🐸" };
+        // プレイヤー初期位置（y=10 は増やした芝生の一番下）
+        const player = { x: 4, y: 10, char: "🐸", vx: 0 };
+        let particles = [];
 
+        // 岩の配置（x, yの座標：y=9が手前の新しい芝生エリア）
+        const rocks = [
+            {x: 2, y: 9}, {x: 5, y: 9}, {x: 3, y: 4}, {x: 6, y: 4}
+        ];
+
+        // 丸太の設定
         const lanes = [
-            { y: 8, speed: 0.8, dir: -1, cars: [{x:0}, {x:200}, {x:350}], icon: "🚗" },
-            { y: 7, speed: 1.2, dir: 1,  cars: [{x:50}, {x:250}], icon: "🚕" },
-            { y: 6, speed: 1.8, dir: -1, cars: [{x:100}, {x:300}], icon: "🏎️" },
-            { y: 5, speed: 1.0, dir: 1,  cars: [{x:0}, {x:180}, {x:320}], icon: "🚚" }
+            { y: 8, speed: 1.5, dir: -1, logs: [{x:0, w:60}, {x:200, w:60}] },
+            { y: 7, speed: 1.0, dir: 1,  logs: [{x:50, w:100}, {x:300, w:100}] },
+            { y: 6, speed: 2.0, dir: -1, logs: [{x:100, w:50}, {x:300, w:50}] },
+            { y: 5, speed: 1.2, dir: 1,  logs: [{x:0, w:120}, {x:250, w:120}] }
         ];
 
         function draw() {
             if (isCleared) return;
+            frame++;
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            ctx.fillStyle = "#2ecc71"; 
-            ctx.fillRect(0, 450, 400, 50); // Start
-            ctx.fillRect(0, 0, 400, 250);   // Goal area
+            // 背景：空
+            ctx.fillStyle = "#87CEEB";
+            ctx.fillRect(0, 0, 400, 250);
 
-            ctx.fillStyle = "#444"; 
-            ctx.fillRect(0, 250, 400, 200); // Road
+            // 川
+            ctx.fillStyle = "#2980b9";
+            ctx.fillRect(0, 250, 400, 200);
 
+            // 芝生（手前を2行分に拡大：y=450〜550）
+            ctx.fillStyle = "#2ecc71";
+            ctx.fillRect(0, 450, 400, 100); // スタートエリア（2行分）
+            ctx.fillRect(0, 200, 400, 50);  // 中洲
+
+            // 岩（Obstacles）の描画
+            ctx.font = "35px Arial";
+            rocks.forEach(r => {
+                ctx.fillText("🪨", r.x * gridSize + 5, r.y * gridSize + 40);
+            });
+
+            // 丸太と判定
+            let onLog = false;
+            player.vx = 0;
             lanes.forEach(lane => {
-                lane.cars.forEach(car => {
-                    car.x += lane.speed * lane.dir;
-                    if (car.x > 400) car.x = -50;
-                    if (car.x < -50) car.x = 400;
-
-                    ctx.font = "35px Arial";
-                    ctx.fillText(lane.icon, car.x, lane.y * gridSize + 35);
-
-                    let px = player.x * gridSize;
-                    let py = player.y * gridSize;
-                    if (py === lane.y * gridSize && car.x < px + 30 && car.x + 40 > px) {
-                        resetPlayer();
+                ctx.fillStyle = "#5d4037";
+                lane.logs.forEach(log => {
+                    log.x += lane.speed * lane.dir;
+                    if (log.x > 400) log.x = -log.w;
+                    if (log.x < -log.w) log.x = 400;
+                    ctx.beginPath();
+                    ctx.roundRect(log.x, lane.y * gridSize + 5, log.w, 40, 10);
+                    ctx.fill();
+                    
+                    let px = player.x * gridSize + 25;
+                    if (player.y === lane.y && px > log.x && px < log.x + log.w) {
+                        onLog = true;
+                        player.vx = lane.speed * lane.dir;
                     }
                 });
             });
 
+            // 水没判定
+            if (player.y >= 5 && player.y <= 8 && !onLog) {
+                seCrash.play().catch(()=>{});
+                resetPlayer();
+            }
+
+            // 丸太移動適用
+            if (onLog) {
+                player.x += player.vx / gridSize;
+                if(player.x < 0) player.x = 0;
+                if(player.x > 7) player.x = 7;
+            }
+
+            // プレイヤー
             ctx.fillText(player.char, player.x * gridSize + 5, player.y * gridSize + 40);
 
-            if (player.y <= 4) {
+            if (player.y <= 3) { // y=4より上がゴール
                 isCleared = true;
+                seGoal.play().catch(()=>{});
                 clearScreen.style.display = "block";
             }
             requestAnimationFrame(draw);
@@ -105,45 +135,45 @@ Smartphone Move : Tap top, bottom, left, and right of the frog</p>
 
         function resetPlayer() {
             player.x = 4;
-            player.y = 9;
+            player.y = 10;
         }
 
-        // キーボード操作
-        window.addEventListener("keydown", e => {
+        function move(dx, dy) {
             if (isCleared) return;
-            if (e.key === "ArrowUp" && player.y > 0) player.y--;
-            if (e.key === "ArrowDown" && player.y < 9) player.y++;
-            if (e.key === "ArrowLeft" && player.x > 0) player.x--;
-            if (e.key === "ArrowRight" && player.x < 7) player.x++;
+            bgm.play().catch(()=>{});
+
+            let nextX = player.x + dx;
+            let nextY = player.y + dy;
+
+            // 岩との衝突判定
+            const hitRock = rocks.some(r => r.x === nextX && r.y === nextY);
+            if (hitRock) return; // 岩があれば移動をキャンセル
+
+            // 画面範囲制限
+            if (nextX >= 0 && nextX <= 7) player.x = nextX;
+            if (nextY >= 0 && nextY <= 10) player.y = nextY;
+
+            seJump.currentTime = 0;
+            seJump.play().catch(()=>{});
+        }
+
+        window.addEventListener("keydown", e => {
+            if (e.key === "ArrowUp") move(0, -1);
+            if (e.key === "ArrowDown") move(0, 1);
+            if (e.key === "ArrowLeft") move(-1, 0);
+            if (e.key === "ArrowRight") move(1, 0);
         });
 
-        // タップ操作（画面拡大に対応した計算式に修正）
         canvas.addEventListener("touchstart", e => {
-            if (isCleared) return;
-            e.preventDefault(); // スクロール防止
-
+            e.preventDefault();
             const rect = canvas.getBoundingClientRect();
-            const touch = e.touches[0];
-            
-            // 画面上の表示サイズと実際のゲーム内サイズの比率を計算
-            const scaleX = canvas.width / rect.width;
-            const scaleY = canvas.height / rect.height;
-
-            // タップ位置をゲーム内の座標に変換
-            const tx = (touch.clientX - rect.left) * scaleX;
-            const ty = (touch.clientY - rect.top) * scaleY;
-
+            const t = e.touches[0];
+            const tx = (t.clientX - rect.left) * (canvas.width / rect.width);
+            const ty = (t.clientY - rect.top) * (canvas.height / rect.height);
             const px = player.x * gridSize + 25;
             const py = player.y * gridSize + 25;
-
-            // 移動方向の決定
-            if (Math.abs(tx - px) > Math.abs(ty - py)) {
-                if (tx > px && player.x < 7) player.x++;
-                else if (player.x > 0) player.x--;
-            } else {
-                if (ty > py && player.y < 9) player.y++;
-                else if (player.y > 0) player.y--;
-            }
+            if (Math.abs(tx - px) > Math.abs(ty - py)) move(tx > px ? 1 : -1, 0);
+            else move(0, ty > py ? 1 : -1);
         }, {passive: false});
 
         draw();
