@@ -5,10 +5,26 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Frogger - Deluxe Edition</title>
     <style>
-        body { background: #222; color: white; font-family: sans-serif; text-align: center; margin: 0; overflow: hidden; position: fixed; width: 100%; height: 100%; }
-        canvas { background: #87CEEB; border: 2px solid #555; display: block; margin: 0 auto; width: 95vw; max-width: 400px; height: auto; touch-action: none; }
-        #start-screen, #clear-screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 100; display: flex; flex-direction: column; justify-content: center; align-items: center; }
-        button { padding: 15px 30px; font-size: 1.2rem; cursor: pointer; background: #2ecc71; border: none; color: white; border-radius: 10px; }
+        body { 
+            background: #222; color: white; font-family: sans-serif; text-align: center; 
+            margin: 0; padding: 0; overflow: hidden; position: fixed; width: 100%; height: 100%;
+        }
+        canvas { 
+            background: #87CEEB; border: 2px solid #555; display: block; margin: 0 auto; 
+            width: 95vw; max-width: 400px; height: auto; touch-action: none;
+        }
+        #start-screen, #clear-screen { 
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
+            background: rgba(0,0,0,0.85); z-index: 100; 
+            display: flex; flex-direction: column; justify-content: center; align-items: center; 
+        }
+        button { 
+            padding: 15px 35px; font-size: 1.5rem; cursor: pointer; 
+            background: #2ecc71; border: none; color: white; border-radius: 10px;
+            box-shadow: 0 4px #27ae60;
+        }
+        button:active { transform: translateY(2px); box-shadow: 0 2px #27ae60; }
+        h1 { font-size: 2.5rem; margin-bottom: 20px; color: #f1c40f; }
     </style>
 </head>
 <body>
@@ -19,7 +35,7 @@
     </div>
 
     <div id="clear-screen" style="display:none;">
-        <h1 style="color: #f1c40f; font-size: 3rem; margin: 0;">CONGRATS!</h1>
+        <h1 style="color: #f1c40f;">CONGRATS!</h1>
         <p style="font-size: 1.5rem;">Keyword: Signal</p>
         <button onclick="location.reload()">REPLAY</button>
     </div>
@@ -31,15 +47,17 @@
         const ctx = canvas.getContext("2d");
         const clearScreen = document.getElementById("clear-screen");
 
-        // 音声
+        // --- 音声設定 ---
         const bgm = new Audio('./assets/sounds/frog.mp3'); bgm.loop = true;
         const seJump = new Audio('./assets/sounds/jump.mp3');
         const seCrash = new Audio('./assets/sounds/crash.mp3');
         const seGoal = new Audio('./assets/sounds/goal.mp3');
 
-        // --- 画像の読み込み ---
+        // --- 画像設定 ---
+        const frogImg = new Image();
+        frogImg.src = './assets/images/frog.png';
         const logImg = new Image();
-        logImg.src = './assets/images/log.png'; // あなたが用意する丸太の画像パス
+        logImg.src = './assets/images/log.png';
 
         let gameStarted = false;
         let isCleared = false;
@@ -54,13 +72,13 @@
             draw();
         }
 
-        // パーティクル生成（type: 'dust', 'splash', 'celebrate'）
+        // パーティクル生成ロジック
         function createParticles(x, y, color, count = 8, speed = 3, type = 'normal') {
             for(let i=0; i<count; i++) {
                 particles.push({
                     x: x, y: y,
                     vx: (Math.random()-0.5) * speed,
-                    vy: (Math.random()-0.5) * speed - (type === 'celebrate' ? 2 : 0), // お祝いは上に飛ぶ
+                    vy: (Math.random()-0.5) * speed - (type === 'celebrate' ? 3 : 0),
                     life: 1.0,
                     color: color,
                     size: type === 'celebrate' ? Math.random() * 6 + 2 : 4
@@ -81,25 +99,23 @@
         ];
 
         function draw() {
+            if (!gameStarted) return;
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // 背景
-            ctx.fillStyle = "#2980b9"; ctx.fillRect(0, 250, 400, 200); // 川
-            ctx.fillStyle = "#2ecc71";
-            ctx.fillRect(0, 450, 400, 150); ctx.fillRect(0, 200, 400, 50); ctx.fillRect(0, 0, 400, 200);
+            // 1. レイヤー1: 背景（川と空）
+            ctx.fillStyle = "#87CEEB"; ctx.fillRect(0, 0, 400, 600);
+            ctx.fillStyle = "#2980b9"; ctx.fillRect(0, 250, 400, 200);
 
-            // 丸太（画像描画）
+            // 2. レイヤー2: 丸太（画像）
             let onLog = false;
             lanes.forEach(lane => {
                 lane.logs.forEach(log => {
                     log.x += lane.speed * lane.dir;
                     if (log.x > 400) log.x = -log.w; if (log.x < -log.w) log.x = 400;
                     
-                    if (logImg.complete) {
-                        // 画像が読み込まれていれば画像を表示
+                    if (logImg.complete && logImg.naturalWidth !== 0) {
                         ctx.drawImage(logImg, log.x, lane.y * gridSize + 5, log.w, 40);
                     } else {
-                        // 読み込み中・エラー時は予備の茶色
                         ctx.fillStyle = "#5d4037";
                         ctx.fillRect(log.x, lane.y * gridSize + 5, log.w, 40);
                     }
@@ -110,43 +126,57 @@
                 });
             });
 
-            // 水没判定
-            if (!isCleared && player.y >= 5 && player.y <= 8 && !onLog) {
-                createParticles(player.x * gridSize + 25, player.y * gridSize + 25, "#FFF", 15, 5);
-                seCrash.currentTime = 0; seCrash.play(); resetPlayer();
-            }
+            // 3. レイヤー3: 芝生
+            ctx.fillStyle = "#2ecc71";
+            ctx.fillRect(0, 450, 400, 150); // 手前
+            ctx.fillRect(0, 200, 400, 50);  // 中洲
+            ctx.fillRect(0, 0, 400, 200);   // ゴール芝生（隙間なし）
 
-            // パーティクル更新（お祝い中は常に動かす）
+            // 4. レイヤー4: 家・障害物
+            ctx.font = "45px Arial";
+            ctx.fillText("🏠", 4 * gridSize + 2, 45);
+            ctx.font = "35px Arial";
+            obstacles.forEach(obs => ctx.fillText(obs.icon, obs.x * gridSize + 5, obs.y * gridSize + 40));
+
+            // 5. レイヤー5: パーティクル
             particles.forEach((p, i) => {
                 p.x += p.vx; p.y += p.vy; p.life -= 0.02;
-                if (isCleared) p.vy += 0.1; // ゴール後は重力で落ちる演出
+                if (isCleared) p.vy += 0.1; // ゴール後は重力追加
                 ctx.fillStyle = p.color; ctx.globalAlpha = p.life;
                 ctx.fillRect(p.x, p.y, p.size, p.size);
                 if(p.life <= 0) particles.splice(i, 1);
             });
             ctx.globalAlpha = 1.0;
 
-            // 家・障害物・プレイヤー
-            ctx.font = "45px Arial"; ctx.fillText("🏠", 4 * gridSize + 2, 45);
-            ctx.font = "35px Arial";
-            obstacles.forEach(obs => ctx.fillText(obs.icon, obs.x * gridSize + 5, obs.y * gridSize + 40));
-            
+            // 6. レイヤー6: プレイヤー（画像）
             if (!isCleared) {
-                if (onLog) { player.x += player.vx / gridSize; }
-                ctx.fillText(player.char, player.x * gridSize + 5, player.y * gridSize + 40);
+                if (onLog) { 
+                    player.x += player.vx / gridSize;
+                    if(player.x < 0) player.x = 0; if(player.x > 7) player.x = 7;
+                }
+                if (frogImg.complete && frogImg.naturalWidth !== 0) {
+                    ctx.drawImage(frogImg, player.x * gridSize, player.y * gridSize, gridSize, gridSize);
+                } else {
+                    ctx.fillText(player.char, player.x * gridSize + 5, player.y * gridSize + 40);
+                }
             }
 
-            // ゴール演出
+            // 7. 判定（水没）
+            if (!isCleared && player.y >= 5 && player.y <= 8 && !onLog) {
+                createParticles(player.x * gridSize + 25, player.y * gridSize + 25, "#FFF", 15, 5);
+                seCrash.currentTime = 0; seCrash.play(); resetPlayer();
+            }
+
+            // 8. ゴール演出
             if (!isCleared && player.y === 0 && Math.round(player.x) === 4) {
                 isCleared = true;
                 seGoal.play();
                 clearScreen.style.display = "flex";
-                // 盛大にパーティクルを出す
                 for(let j=0; j<10; j++) {
                     setTimeout(() => {
                         const colors = ["#f1c40f", "#e74c3c", "#3498db", "#9b59b6", "#ffffff"];
-                        createParticles(Math.random()*400, Math.random()*300, colors[j%5], 30, 8, 'celebrate');
-                    }, j * 200);
+                        createParticles(Math.random()*400, Math.random()*300, colors[j%5], 40, 10, 'celebrate');
+                    }, j * 150);
                 }
             }
             requestAnimationFrame(draw);
@@ -161,7 +191,7 @@
             if (obstacles.some(obs => obs.x === nextX && obs.y === nextY)) return;
             if (nextX >= 0 && nextX <= 7) player.x = nextX;
             if (nextY >= 0 && nextY <= 11) player.y = nextY;
-            createParticles(player.x * gridSize + 25, player.y * gridSize + 40, "#bdc3c7", 5, 2);
+            createParticles(player.x * gridSize + 25, player.y * gridSize + 40, "#bdc3c7", 6, 2);
             seJump.currentTime = 0; seJump.play();
         }
 
@@ -171,6 +201,19 @@
             if (e.key === "ArrowLeft") move(-1, 0);
             if (e.key === "ArrowRight") move(1, 0);
         });
+
+        canvas.addEventListener("touchstart", e => {
+            e.preventDefault();
+            const rect = canvas.getBoundingClientRect();
+            const t = e.touches[0];
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            const tx = (t.clientX - rect.left) * scaleX;
+            const ty = (t.clientY - rect.top) * scaleY;
+            const px = player.x * gridSize + 25; const py = player.y * gridSize + 25;
+            if (Math.abs(tx - px) > Math.abs(ty - py)) move(tx > px ? 1 : -1, 0);
+            else move(0, ty > py ? 1 : -1);
+        }, {passive: false});
     </script>
 </body>
 </html>
